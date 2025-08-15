@@ -22,6 +22,62 @@ interface ProposalHistory {
   date: string
 }
 
+// Componente para formatar mensagens do bot
+const FormattedMessage = ({ content }: { content: string }) => {
+  // Função para processar o texto e aplicar formatação
+  const formatText = (text: string) => {
+    // Divide o texto em linhas
+    const lines = text.split('\n')
+    const elements: React.ReactNode[] = []
+    
+    lines.forEach((line, index) => {
+      // Verifica se é uma linha vazia
+      if (line.trim() === '') {
+        elements.push(<br key={`br-${index}`} />)
+        return
+      }
+      
+      // Verifica se começa com emoji (título de seção)
+      if (/^(🔧|👥|⏰|🛠️|🎯|🔹|🔍|❌|💡|🤖|📄|❓)/.test(line)) {
+        elements.push(
+          <div key={index} className="font-bold text-[#1E3A8A] mt-4 mb-2 text-base">
+            {line}
+          </div>
+        )
+      }
+      // Verifica se é um item de lista (começa com -)
+      else if (line.trim().startsWith('-')) {
+        elements.push(
+          <div key={index} className="ml-4 mb-1 flex items-start">
+            <span className="text-[#1E3A8A] mr-2">•</span>
+            <span className="flex-1">{line.trim().substring(1).trim()}</span>
+          </div>
+        )
+      }
+      // Verifica se é um subtítulo em MAIÚSCULAS
+      else if (line.trim() === line.trim().toUpperCase() && line.trim().length > 3) {
+        elements.push(
+          <div key={index} className="font-semibold text-[#1E3A8A] mt-3 mb-2 uppercase text-sm">
+            {line.trim()}
+          </div>
+        )
+      }
+      // Texto normal
+      else {
+        elements.push(
+          <div key={index} className="mb-2 leading-relaxed">
+            {line}
+          </div>
+        )
+      }
+    })
+    
+    return elements
+  }
+
+  return <div className="space-y-1">{formatText(content)}</div>
+}
+
 export default function TechnicalProposalChatbot() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -164,8 +220,15 @@ export default function TechnicalProposalChatbot() {
                     message.isUser ? "bg-[#BFDBFE] text-gray-900" : "bg-white text-[#1E3A8A] border border-gray-100"
                   }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.content}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  {/* AQUI É A MUDANÇA PRINCIPAL */}
+                  {message.isUser ? (
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+                  ) : (
+                    <div className="text-sm">
+                      <FormattedMessage content={message.content} />
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-2">
                     {message.timestamp.toLocaleTimeString("pt-BR", {
                       hour: "2-digit",
                       minute: "2-digit",
