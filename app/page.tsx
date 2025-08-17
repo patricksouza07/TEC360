@@ -2,12 +2,12 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Send, Paperclip, Download, Bot, User, Menu, X } from "lucide-react"
+import { Send, Paperclip, Download, Bot, User, Menu, X, Trash2 } from "lucide-react"
 
 interface Message {
   id: string
@@ -20,24 +20,21 @@ interface ProposalHistory {
   id: string
   title: string
   date: string
+  messages: Message[]
 }
 
 // Componente para formatar mensagens do bot
 const FormattedMessage = ({ content }: { content: string }) => {
-  // Função para processar o texto e aplicar formatação
   const formatText = (text: string) => {
-    // Divide o texto em linhas
     const lines = text.split('\n')
     const elements: React.ReactNode[] = []
     
     lines.forEach((line, index) => {
-      // Verifica se é uma linha vazia
       if (line.trim() === '') {
         elements.push(<br key={`br-${index}`} />)
         return
       }
       
-      // Verifica se começa com emoji (título de seção)
       if (/^(🔧|👥|⏰|🛠️|🎯|🔹|🔍|❌|💡|🤖|📄|❓)/.test(line)) {
         elements.push(
           <div key={index} className="font-bold text-[#1E3A8A] mt-4 mb-2 text-base">
@@ -45,7 +42,6 @@ const FormattedMessage = ({ content }: { content: string }) => {
           </div>
         )
       }
-      // Verifica se é um item de lista (começa com -)
       else if (line.trim().startsWith('-')) {
         elements.push(
           <div key={index} className="ml-4 mb-1 flex items-start">
@@ -54,7 +50,6 @@ const FormattedMessage = ({ content }: { content: string }) => {
           </div>
         )
       }
-      // Verifica se é um subtítulo em MAIÚSCULAS
       else if (line.trim() === line.trim().toUpperCase() && line.trim().length > 3) {
         elements.push(
           <div key={index} className="font-semibold text-[#1E3A8A] mt-3 mb-2 uppercase text-sm">
@@ -62,7 +57,6 @@ const FormattedMessage = ({ content }: { content: string }) => {
           </div>
         )
       }
-      // Texto normal
       else {
         elements.push(
           <div key={index} className="mb-2 leading-relaxed">
@@ -91,13 +85,77 @@ export default function TechnicalProposalChatbot() {
   const [inputValue, setInputValue] = useState("")
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [currentConversationTitle, setCurrentConversationTitle] = useState("Nova Conversa")
+  const [proposalHistory, setProposalHistory] = useState<ProposalHistory[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const proposalHistory: ProposalHistory[] = [
-    { id: "1", title: "Sistema de Automação Industrial", date: "15/01/2024" },
-    { id: "2", title: "Infraestrutura de Rede Corporativa", date: "12/01/2024" },
-    { id: "3", title: "Plataforma de E-commerce", date: "08/01/2024" },
-  ]
+  // Carregar histórico do localStorage ao iniciar
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('proposalHistory')
+    if (savedHistory) {
+      setProposalHistory(JSON.parse(savedHistory))
+    }
+  }, [])
+
+  // Salvar histórico no localStorage sempre que mudar
+  useEffect(() => {
+    localStorage.setItem('proposalHistory', JSON.stringify(proposalHistory))
+  }, [proposalHistory])
+
+  // Função para salvar conversa atual no histórico
+  const saveCurrentConversation = () => {
+    if (messages.length <= 1) return // Não salva se só tem a mensagem inicial
+
+    const newProposal: ProposalHistory = {
+      id: Date.now().toString(),
+      title: currentConversationTitle,
+      date: new Date().toLocaleDateString('pt-BR'),
+      messages: [...messages]
+    }
+
+    setProposalHistory(prev => [newProposal, ...prev])
+  }
+
+  // Função para gerar título automático baseado na primeira resposta do bot
+  const generateTitle = (botResponse: string): string => {
+    const lines = botResponse.split('\n')
+    for (const line of lines) {
+      if (line.includes('Sistema') || line.includes('Equipamento') || line.includes('Instalação')) {
+        const words = line.split(' ')
+        return words.slice(0, 4).join(' ') + '...'
+      }
+    }
+    return `Proposta ${new Date().toLocaleDateString('pt-BR')}`
+  }
+
+  // Função para carregar conversa do histórico
+  const loadConversation = (proposal: ProposalHistory) => {
+    setMessages(proposal.messages)
+    setCurrentConversationTitle(proposal.title)
+    setSidebarOpen(false) // Fecha sidebar no mobile
+  }
+
+  // Função para excluir proposta do histórico
+  const deleteProposal = (proposalId: string, event: React.MouseEvent) => {
+    event.stopPropagation() // Evita abrir a conversa ao clicar no delete
+    setProposalHistory(prev => prev.filter(p => p.id !== proposalId))
+  }
+
+  // Função para iniciar nova conversa
+  const startNewConversation = () => {
+    // Salva conversa atual antes de iniciar nova
+    saveCurrentConversation()
+    
+    // Reset para nova conversa
+    setMessages([{
+      id: "1",
+      content: "Olá! Sou seu assistente especializado em propostas técnicas. Anexe seu memorial descritivo e eu criarei uma proposta profissional completa para você.",
+      isUser: false,
+      timestamp: new Date(),
+    }])
+    setCurrentConversationTitle("Nova Conversa")
+    setSidebarOpen(false)
+  }
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() && !attachedFile) return
@@ -109,17 +167,12 @@ export default function TechnicalProposalChatbot() {
       timestamp: new Date(),
     }
 
-    // Atualiza a UI com a mensagem do usuário
     setMessages((prev) => [...prev, newMessage])
 
-    // Salva a referência do arquivo antes de limpar o estado
     const fileToSend = attachedFile
-
-    // Limpa input e arquivo
     setInputValue("")
     setAttachedFile(null)
 
-    // Monta FormData para enviar via fetch
     const formData = new FormData()
     formData.append("message", newMessage.content)
     formData.append("chatId", "usuario-web")
@@ -131,15 +184,12 @@ export default function TechnicalProposalChatbot() {
     }
 
     try {
-      // Substitua abaixo pela URL do seu webhook no n8n
       const res = await fetch("https://mlvservice.app.n8n.cloud/webhook-test/chatbot-TEC360", {
         method: "POST",
         body: formData,
       })
 
       const json = await res.json()
-
-      // Ajuste 'json.response' para o campo correto que seu webhook retornar
       const aiResponseContent = json.response || "Não recebi resposta do servidor."
 
       const aiResponse: Message = {
@@ -148,7 +198,14 @@ export default function TechnicalProposalChatbot() {
         isUser: false,
         timestamp: new Date(),
       }
+      
       setMessages((prev) => [...prev, aiResponse])
+
+      // Gera título automaticamente na primeira resposta do bot
+      if (currentConversationTitle === "Nova Conversa") {
+        const newTitle = generateTitle(aiResponseContent)
+        setCurrentConversationTitle(newTitle)
+      }
     } catch (error) {
       console.error("Erro ao chamar webhook:", error)
       const errorMessage: Message = {
@@ -173,6 +230,23 @@ export default function TechnicalProposalChatbot() {
       event.preventDefault()
       handleSendMessage()
     }
+  }
+
+  // Função para exportar conversa atual como texto
+  const exportCurrentConversation = () => {
+    const conversationText = messages
+      .map(msg => `${msg.isUser ? 'Usuário' : 'Bot'} (${msg.timestamp.toLocaleString('pt-BR')}): ${msg.content}`)
+      .join('\n\n---\n\n')
+
+    const blob = new Blob([conversationText], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${currentConversationTitle}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -220,7 +294,6 @@ export default function TechnicalProposalChatbot() {
                     message.isUser ? "bg-[#BFDBFE] text-gray-900" : "bg-white text-[#1E3A8A] border border-gray-100"
                   }`}
                 >
-                  {/* AQUI É A MUDANÇA PRINCIPAL */}
                   {message.isUser ? (
                     <p className="text-sm leading-relaxed">{message.content}</p>
                   ) : (
@@ -302,7 +375,7 @@ export default function TechnicalProposalChatbot() {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Propostas Geradas</span>
                   <Badge variant="secondary" className="bg-[#E6F0FA] text-[#1E3A8A]">
-                    247
+                    {proposalHistory.length}
                   </Badge>
                 </div>
               </Card>
@@ -316,20 +389,27 @@ export default function TechnicalProposalChatbot() {
               </Card>
               <Card className="p-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Últimos Clientes</span>
+                  <span className="text-sm text-gray-600">Conversa Atual</span>
                   <Badge variant="secondary" className="bg-[#E6F0FA] text-[#1E3A8A]">
-                    15
+                    {messages.length > 1 ? messages.length - 1 : 0}
                   </Badge>
                 </div>
               </Card>
             </div>
           </div>
 
-          {/* Export Button */}
-          <div>
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <Button
+              onClick={startNewConversation}
+              variant="outline"
+              className="w-full border-[#1E3A8A] text-[#1E3A8A] hover:bg-[#E6F0FA]"
+            >
+              Nova Conversa
+            </Button>
             <Button
               className="w-full bg-[#1E3A8A] hover:bg-[#1E40AF] text-white transition-all duration-200 hover:scale-105"
-              onClick={() => alert("Exportando proposta como PDF...")}
+              onClick={exportCurrentConversation}
             >
               <Download className="w-4 h-4 mr-2" />
               Baixar Proposta
@@ -339,17 +419,40 @@ export default function TechnicalProposalChatbot() {
           {/* Proposal History */}
           <div>
             <h3 className="text-lg font-semibold text-[#1E3A8A] mb-4">Histórico de Propostas</h3>
-            <div className="space-y-2">
-              {proposalHistory.map((proposal) => (
-                <Card
-                  key={proposal.id}
-                  className="p-3 cursor-pointer hover:bg-[#E6F0FA] transition-colors duration-200"
-                  onClick={() => alert(`Abrindo proposta: ${proposal.title}`)}
-                >
-                  <h4 className="text-sm font-medium text-[#1E3A8A] mb-1">{proposal.title}</h4>
-                  <p className="text-xs text-gray-500">{proposal.date}</p>
-                </Card>
-              ))}
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {proposalHistory.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Nenhuma proposta salva ainda
+                </p>
+              ) : (
+                proposalHistory.map((proposal) => (
+                  <Card
+                    key={proposal.id}
+                    className="p-3 cursor-pointer hover:bg-[#E6F0FA] transition-colors duration-200 group"
+                    onClick={() => loadConversation(proposal)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-[#1E3A8A] mb-1 line-clamp-2">
+                          {proposal.title}
+                        </h4>
+                        <p className="text-xs text-gray-500">{proposal.date}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {proposal.messages.length - 1} mensagens
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => deleteProposal(proposal.id, e)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 h-auto text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         </div>
