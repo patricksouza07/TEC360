@@ -184,7 +184,7 @@ export default function TechnicalProposalChatbot() {
     }
 
     try {
-      const res = await fetch("https://mlvservice.app.n8n.cloud/webhook-test/chatbot-TEC360", {
+      const res = await fetch("https://mlvservice.app.n8n.cloud/webhook/chatbot-TEC360", {
         method: "POST",
         body: formData,
       })
